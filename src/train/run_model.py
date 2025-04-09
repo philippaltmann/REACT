@@ -43,15 +43,16 @@ def run_trained_model(model, env):
 @click.option("--saved-model")
 @click.option("--nr-episodes", type=int, default=1)
 @click.option("--checkpoint", type=int, default=0)
+@click.option("--name", default='')
 @click.option("--seed", default=42)
-def run_model(env_name: str, saved_model: str, nr_episodes: int, checkpoint: int, seed: int):
+def run_model(env_name: str, saved_model: str, nr_episodes: int, checkpoint: int, name: str, seed: int):
     hyphi_gym.register_envs()
     render_mode = "blender" if "Grid" in env_name else "3D"
     checkpoint = f"rl_model_{checkpoint}_steps" if checkpoint > 0 else "best_model"
     model_path = MODEL_PATH.joinpath(f'{env_name}/{saved_model}/{checkpoint}.zip')
     video_path = VIDEO_PATH.joinpath(f'{env_name}/train/'); os.makedirs(video_path, exist_ok=True)
     log_path = LOG_PATH.joinpath(f"Train/{env_name}/"); os.makedirs(log_path, exist_ok=True)
-    base_file = f'{saved_model}-{checkpoint}-{seed}'
+    base_file = f'{env_name if len(name) == 0 else name}-{seed}'
     
     if env_name == "FetchReach": env_name += 'Agents' # Train on random targets / evaluate on random initial pos
     env = Autoreset(Monitor(gym.make(**hyphi_gym.named(env_name), seed=33, render_mode=render_mode), record_video=True))
