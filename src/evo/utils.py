@@ -54,27 +54,29 @@ def get_traj_length(env_name, state_sequence, state_sequence_without_duplicates=
 #######################################
 # utility methods for state encoding ##
 #######################################
-def map_state_encoding_to_value(state_encoding, state_is_int, min_state, max_state):
+def map_state_encoding_to_value(state_encoding, config):
     # inverse normalization
-    if state_is_int:
+    if config.state_is_int:
         normalized_state = int(state_encoding, 2) / (2 ** len(state_encoding))
-        state = math.floor(normalized_state * (max_state + 1 - min_state) + min_state)
+        state = math.floor(normalized_state * (config.max_state + 1 - config.min_state) + config.min_state)
     else:
         normalized_state = int(state_encoding, 2) / (2 ** len(state_encoding) - 1)
-        state = normalized_state * (max_state - min_state) + min_state
+        state = normalized_state * (config.max_state - config.min_state) + config.min_state
     return state
 
 
-def get_state(state_encoding, dimensions, state_is_int, min_state, max_state):
+def get_state(state_encoding, config):
+    # dimensions, state_is_int, min_state, max_state
+    CONFIG.dimensions, CONFIG.is_discrete, CONFIG.min_state,  CONFIG.max_state
     # split state_encoding
-    coordinate_state_encoding_length = len(state_encoding) / dimensions
+    coordinate_state_encoding_length = len(state_encoding) / config.dimensions
     # assert int
     state = []
-    for i in range(dimensions):
+    for i in range(config.dimensions):
         start_index = int(i * coordinate_state_encoding_length)
         end_index = int((i + 1) * coordinate_state_encoding_length)
         coordinate_state_encoding = state_encoding[start_index:end_index]
-        state.append(map_state_encoding_to_value(coordinate_state_encoding, state_is_int, min_state, max_state))
+        state.append(map_state_encoding_to_value(coordinate_state_encoding, config))
     return state
 
 
@@ -117,6 +119,9 @@ def get_max_owd(map_size):
 
 
 def clean_observation(obs):
+    # if obs.shape[0] == 1:
+    # hyphi gym Fetch -> return agent pos, (target: obs[0][-3:])
+    if obs.shape[-1] == 13: return obs[0][:3]
     if isinstance(obs, OrderedDict):
         obs = obs['achieved_goal'].tolist()
     if isinstance(obs, np.ndarray):
