@@ -30,11 +30,8 @@ def remove_duplicate_states(states):
     return new_states
 
 
-def reduce_precision_of_states(states, precision):
-    state_sequence = []
-    for state in states:
-        state_sequence.append([round(state_coordinate, precision) for state_coordinate in state])
-    return state_sequence
+def reduce_precision_of_states(states, precision): 
+  return [states.round(precision).tolist() for states in states]
 
 
 def get_traj_length(env_name, state_sequence, state_sequence_without_duplicates=None):
@@ -54,30 +51,21 @@ def get_traj_length(env_name, state_sequence, state_sequence_without_duplicates=
 #######################################
 # utility methods for state encoding ##
 #######################################
-def map_state_encoding_to_value(state_encoding, config):
+def map_state_encoding_to_value(state_encoding):
     # inverse normalization
-    if config.state_is_int:
+    if CONFIG.is_discrete:
         normalized_state = int(state_encoding, 2) / (2 ** len(state_encoding))
-        state = math.floor(normalized_state * (config.max_state + 1 - config.min_state) + config.min_state)
+        state = math.floor(normalized_state * (CONFIG.max_state + 1 - CONFIG.min_state) + CONFIG.min_state)
     else:
         normalized_state = int(state_encoding, 2) / (2 ** len(state_encoding) - 1)
-        state = normalized_state * (config.max_state - config.min_state) + config.min_state
+        state = normalized_state * (CONFIG.max_state - CONFIG.min_state) + CONFIG.min_state
     return state
 
 
-def get_state(state_encoding, config):
-    # dimensions, state_is_int, min_state, max_state
-    CONFIG.dimensions, CONFIG.is_discrete, CONFIG.min_state,  CONFIG.max_state
-    # split state_encoding
-    coordinate_state_encoding_length = len(state_encoding) / config.dimensions
-    # assert int
-    state = []
-    for i in range(config.dimensions):
-        start_index = int(i * coordinate_state_encoding_length)
-        end_index = int((i + 1) * coordinate_state_encoding_length)
-        coordinate_state_encoding = state_encoding[start_index:end_index]
-        state.append(map_state_encoding_to_value(coordinate_state_encoding, config))
-    return state
+def get_state(state_encoding):
+    coordinate_state_encoding_length = len(state_encoding) / CONFIG.dimensions # split state_encoding
+    idx = lambda i: int(i * coordinate_state_encoding_length) 
+    return [map_state_encoding_to_value(state_encoding[idx(i):idx(i + 1)]) for i in range(CONFIG.dimensions)]
 
 
 def convert_state_to_custom_map(state, env_name, seed):
@@ -119,23 +107,11 @@ def get_max_owd(map_size):
 
 
 def clean_observation(obs):
-    # if obs.shape[0] == 1:
     # hyphi gym Fetch -> return agent pos, (target: obs[0][-3:])
-    if obs.shape[-1] == 13: return obs[0][:3]
-    if isinstance(obs, OrderedDict):
-        obs = obs['achieved_goal'].tolist()
-    if isinstance(obs, np.ndarray):
+    if "Fetch" in CONFIG.env_name: return obs[0][:3]
+    if "Grid" in CONFIG.env_name: 
+        idx = np.where(obs[0] == 2)[0]
+        if len(idx) == 0: return [None, None]
         size = int(math.sqrt(len(obs[0])))
-        obs2 = obs[0].reshape((size, size))
-        row = None
-        column = None
-        for i in range(len(obs2)):
-            if 2 in obs2[i]:
-                row = i - 1
-                for j in range(len(obs2[i])):
-                    if obs2[i][j] == 2:
-                        column = j - 1
-                        break
-                break
-        return [row, column]
+        return [int(idx[0]) // size - 1, int(idx[0]) % size - 1]
     return obs[0]
