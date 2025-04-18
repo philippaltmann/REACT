@@ -26,8 +26,7 @@ class Evaluate(EvalCallback):
 @click.option("--save-freq", default=50000)
 @click.option("--env-seed", default=42)
 def train(env_name: str, name: str, model, render: bool, steps: int, save_freq: int, env_seed: int):
-    register_envs(); save_freq = min(save_freq, steps)
-    log_dir = f'{env_name}/{name}_{model}'
+    save_freq = min(save_freq, steps); log_dir = f'{env_name}/{name}_{model}'
     save_path = MODEL_PATH.joinpath(log_dir)
 
     if env_name == "FetchReach": env_name += 'Targets' # Train on random targets / evaluate on random initial pos
