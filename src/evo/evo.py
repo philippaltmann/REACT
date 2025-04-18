@@ -1,85 +1,80 @@
+import os
 import click
 import random
 from operator import attrgetter
 from typing import List, Tuple
 import gymnasium as gym
 import hyphi_gym
-from gymnasium.wrappers import AutoResetWrapper
 from hyphi_gym import Monitor
+import numpy as np
 
 from config import CONFIG
-from constants import EVO_LOG_PATH
+from constants import EVO_LOG_PATH, LOG_PATH
 from evo.crossover import cross_over
 from evo.evo_logger import EvoLogger
 from evo.individual import Individual
 from evo.mutation import mutate
 from evo.utils import multisort, get_max_owd
-import evo.metrics as metrics
+from evo.one_way_distance import two_way_distance
+from plot.plot import plot_movement, ALGS, plot_heatmap, run_trajectory
 
 
-def generate_initial_population(pop_size: int, id: int, weights: List[float]) -> (
-        Tuple)[List[Individual], int]:
-    population = []
-
-    bitstring_length = CONFIG.dimensions * CONFIG.state_encoding_length
-    for _ in range(pop_size):
-        state_encoding = f'{random.getrandbits(bitstring_length):=0{bitstring_length}b}'
-        population.append(Individual(state_encoding, id, weights))
-        id += 1
-
-    return population, id
+def vizualize_population(population: List[Individual], path: str, render: bool, iteration: int):
+    initial_states = [[str(i.state)] for i in population]
+    algorithms, colors, _ = ALGS(path.split("/")[-3]); os.makedirs(path, exist_ok=True);
+    save_path = f"{path}/Trajectory_{iteration}"
+    if 'Grid' in CONFIG.env_name:
+      plot_heatmap(*run_trajectory(initial_states, [CONFIG.seed], algorithms[0]), list(colors.values())[0], save_path)
+    if 'Fetch' in CONFIG.env_name:
+      plot_movement([initial_states], [[CONFIG.seed]], algorithms, colors, save_path)            
 
 
 def reduce_population(pop_size: int, population: List[Individual]):
-    if len(population) > pop_size:
-        # print("reducing population: ", population[-1].state, " with fitness ", population[-1].fitness)
-        population.pop(-1)
-        reduce_population(pop_size, population)
-    else:
-        return
+    if len(population) > pop_size: return reduce_population(pop_size, population[:-1])
+    else: return population
 
 
 def genetic_algorithm(pop_size: int, max_iter: int, crossover_prob: float, mutation_prob: float, env_name: str,
-                      logger: EvoLogger, render: bool, is_elitist: bool, weights: List[float],
+                      logger: EvoLogger, render: bool, is_elitist: bool, weights: List[float], fidelity_fitness: bool,
                       exp_name: str, plot_frequency: int) -> List[Individual]:
-    # generate population
-    population, next_id = generate_initial_population(pop_size, 0, weights)
 
-    iteration = 0
+    bsl = CONFIG.dimensions * CONFIG.state_encoding_length  # generate population with this bit string length
+    population = [Individual(f'{random.getrandbits(bsl):=0{bsl}b}', id, weights) for id in range(pop_size)]
+    next_id = pop_size; iteration = 0
 
     # compute fitness of each individual in the first generation
-    states_of_previously_evaluated_individuals, local_diversities, certainties = [], [], []
+    prev_individuals, local_diversities, certainties = [], [], []
     for individual in population:
-        individual.compute_fitness(render, states_of_previously_evaluated_individuals, local_diversities, certainties)
+        individual.compute_fitness(render, prev_individuals, local_diversities, certainties)
         if individual.state_sequence:  # avoid owd error because len(traj) could be 0
-            states_of_previously_evaluated_individuals.append(individual.state_sequence_without_duplicates)
+            prev_individuals.append(individual.state_sequence_without_duplicates)
             local_diversities.append(individual.local_diversity_measure)
             certainties.append(individual.certainty_measure)
 
     # recompute first individual to change default values
-    states_of_previously_evaluated_individuals.pop(0)
-    local_diversities.pop(0)
-    certainties.pop(0)
-    # recompute the first (valid) individual, it is valid if it has a state sequence
-    for individual in population:
-        if individual.state_sequence:
-            individual.compute_fitness(render, states_of_previously_evaluated_individuals, local_diversities,
-                                       certainties, True)
-            break
+    prev_individuals.pop(0); local_diversities.pop(0); certainties.pop(0)
+    if population[0].state_sequence: population[0].compute_fitness(render, prev_individuals, local_diversities, certainties, True)
+          
+    # Calculate fidelity for each individual
+    L = np.array([i.get_traj_length() for i in population])
+    R = np.array([i.reward for i in population])
+    F = L / L.sum() * abs(R.mean() - R) 
+
+    for (individual, f) in zip(population, F): 
+        individual.fidelity = f
+        if fidelity_fitness: individual.fitness = f
 
     population.sort(key=attrgetter("fitness"), reverse=True)
+    if plot_frequency: vizualize_population(population, f'{logger.save_path}/{CONFIG.exp_name}', render, iteration)
 
     # Start logging
     for i in population:
         # compute metric
         traj_length = i.get_traj_length()
-        if i.state_sequence != 0:
-            episode_length = len(i.state_sequence) - 1
-        else:
-            episode_length = 0
+        episode_length = max(len(i.state_sequence) - 1, 0)
         logger.log(iteration, i.id, i.state,
                    i.local_diversity_measure, i.global_diversity_measure, i.certainty_measure,
-                   i.fitness,
+                   i.fitness, i.fidelity,
                    i.dist_local_div, i.dist_certainty, i.min_dist_of_other_measures,
                    i.reward, traj_length, episode_length)
     iteration += 1
@@ -108,30 +103,32 @@ def genetic_algorithm(pop_size: int, max_iter: int, crossover_prob: float, mutat
                     states_of_population.append(population[i].state_sequence_without_duplicates)
                     local_diversities.append(population[i].local_diversity_measure)
                     certainties.append(population[i].certainty_measure)
+        
+        # Calculate fidelity for each individual
+        L = np.array([i.get_traj_length() for i in population])
+        R = np.array([i.reward for i in population])
+        F = L / L.sum() * abs(R.mean() - R) 
+        for (individual, f) in zip(population, F): 
+            individual.fidelity = f
+            if fidelity_fitness: individual.fitness = f
 
         population.sort(key=attrgetter("fitness"), reverse=True)
-        reduce_population(pop_size, population)
+        population = reduce_population(pop_size, population)
 
         # Logging
         for i in population:
-            # compute metric
             traj_length = i.get_traj_length()
-            if i.state_sequence != 0:
-                episode_length = len(i.state_sequence) - 1
-            else:
-                episode_length = 0
+            if i.state_sequence != 0: episode_length = len(i.state_sequence) - 1
+            else: episode_length = 0
             logger.log(iteration, i.id, i.state,
                        i.local_diversity_measure, i.global_diversity_measure, i.certainty_measure,
-                       i.fitness,
+                       i.fitness, i.fidelity,
                        i.dist_local_div, i.dist_certainty, i.min_dist_of_other_measures,
                        i.reward, traj_length, episode_length)
 
-        # plot metrics
-        if iteration % plot_frequency == 0 or iteration == 1:
-            if env_name == "FetchReach":
-                metrics.plot_3d_trajectories(population, exp_name, iteration)
-            else:
-                metrics.compute_coverage(population, exp_name, iteration)
+        if plot_frequency and iteration % plot_frequency == 0: 
+            vizualize_population(population, f'{logger.save_path}/{CONFIG.exp_name}', render, iteration)
+
         iteration += 1
 
     return population
@@ -141,59 +138,51 @@ def genetic_algorithm(pop_size: int, max_iter: int, crossover_prob: float, mutat
 @click.option("--env-name")
 @click.option("--saved-model")
 @click.option("--render", is_flag=True)
-@click.option("--pop-size", default=4)
-@click.option("--iterations", default=5)
-@click.option("--crossover", default=0.9)
-@click.option("--mutation", default=0.4)
-@click.option("--name", default="test")
+@click.option("--pop-size", default=10)
+@click.option("--iterations", default=40)
+@click.option("--crossover", default=0.75)
+@click.option("--mutation", default=0.5)
+@click.option("--name", default="")
 @click.option("--is-elitist", is_flag=True)
-@click.option("--plot-frequency", default=10, type=int)
+@click.option("--plot-frequency", default=0, type=int)
 @click.option("--checkpoint", default=0, type=int)
 @click.option("--encoding-length", default=8, type=int)
 @click.option("--env-seed", default=33, type=int)
 @click.option("--seed", default=42, type=int)
-@click.option("--w1", default=1.0)
-@click.option("--w2", default=1.0)
-@click.option("--w3", default=1.0)
-@click.option("--w4", default=1.0)
+@click.option("--w1", default=1.0, help="Weight for global diversity")
+@click.option("--w2", default=1.0, help="Weight for local diversity")
+@click.option("--w3", default=1.0, help="Weight for certainty")
+@click.option("--w4", default=1.0, help="Weight for local min distance")
 def evo_run(env_name: str, saved_model: str, render: bool, pop_size: int, iterations: int,
             crossover: float, mutation: float, name: str, is_elitist: bool, plot_frequency: int,
             checkpoint: int, encoding_length: int, env_seed: int, seed: int, w1: float, w2: float, w3: float, w4: float):
-    env = None
-    if "Grid" in env_name:  # if is_gridworld
-        dimensions = 2
-        is_discrete_env = True
-        min_state = 0
-        try:  # -2 because we do not want to consider outside walls
-            map_size = int(env_name[-2:]) - 2
-        except:
-            try:
-                map_size = int(env_name[-1]) - 2
-            except:
-                raise ValueError()
-        max_state = map_size - 1
-        max_owd = get_max_owd(map_size)
-        if "Grid" in env_name:
-            env_kwargs = hyphi_gym.named(env_name)
-            if "Flat" in env_name:
-                env = AutoResetWrapper(
-                    Monitor(gym.make(env_kwargs["id"], size=env_kwargs["size"], sparse=env_kwargs["sparse"],
-                                     detailed=env_kwargs["detailed"], explore=env_kwargs["explore"],
-                                     random=env_kwargs["random"],
-                                     render_mode="3D"), record_video=render))
-            else:
-                env = AutoResetWrapper(
-                    Monitor(gym.make(env_kwargs["id"], level=env_kwargs["level"], sparse=env_kwargs["sparse"],
-                                     detailed=env_kwargs["detailed"], explore=env_kwargs["explore"],
-                                     random=env_kwargs["random"],
-                                     render_mode="3D", seed=env_seed), record_video=render))
+    
+    name = env_name if len(name) == 0 else name; exp_name = f'{name}-{seed}'
+    env = Monitor(gym.make( 
+        **hyphi_gym.named( # Train on random targets / evaluate on random initial pos
+            env_name + 'Agents' if "Fetch" in env_name else env_name), 
+          render_mode = "blender" if "Grid" in env_name else "3D", seed=env_seed
+        ), record_video=render
+    )
+    # TODO: autoreset needed? 
+    is_discrete_env = 'Grid' in env_name
+    if is_discrete_env:  # if is_gridworld
+        # TODO: check with paper: optimize agent and target?
+        # TODO: mby try agent first 
+        dimensions = len(env.unwrapped.size); min_state = 0
+        # -2 because we do not want to consider outside walls
+        map_size = int(sum(env.unwrapped.size)/dimensions) - 2
+        max_state = map_size - 1; max_owd = get_max_owd(map_size)
     else:  # is continuous env aka FetchReach
-        dimensions = 6  # for now, 3 for start, 3 for goal
-        is_discrete_env = False
-        min_state = -0.15
-        max_state = 0.15
-        max_owd = 0.5196 # two_way_distance([0.15,0.15,0.15], [-0.15,-0.15,-0.15])
-        map_size = 0 # there is no map
+        if env.unwrapped.position_noise != env.unwrapped.target_noise:
+            assert False, "Fetch with inconsistent state ranges"
+        dimensions = len(env.unwrapped.target) + len(env.unwrapped.agent)
+        max_state = env.unwrapped.position_noise; min_state = -max_state
+        max_owd = two_way_distance(
+            np.full((1, *env.unwrapped.target.shape), -env.unwrapped.target_noise),
+            np.full((1, *env.unwrapped.agent.shape), env.unwrapped.position_noise)
+        )
+        map_size = 0  # there is no map
 
     # seed for the algorithm has to be initialized after initializing the environment HoleyGrid, otherwise it is going
     # to be reset
@@ -206,7 +195,7 @@ def evo_run(env_name: str, saved_model: str, render: bool, pop_size: int, iterat
         saved_model=saved_model,
         map_size=map_size,
         pop_size=pop_size,
-        name=name,
+        exp_name=exp_name,
         checkpoint=checkpoint,
         dimensions=dimensions,
         is_discrete_env=is_discrete_env,
@@ -218,11 +207,19 @@ def evo_run(env_name: str, saved_model: str, render: bool, pop_size: int, iterat
         seed=seed
     )
 
-    # register custom gym environment
-    if env_name == "FetchReach":
-        gym.register(id='CustomFetchReach-v1', entry_point='custom_env.custom_env:CustomFetchReachEnv')
+    w = f"({w1:.0f},{w2:.0f},{w3:.0f},{w4:.0f})"
+    if w == '(1,1,1,1)': alg_name = 'REACT'
+    elif w == '(1,0,0,0)': alg_name = 'REACT_G'
+    elif w == '(0,1,1,1)': alg_name = 'REACT_D'
+    elif w == '(1,1,1,0)': alg_name = 'REACT_P' # No distance
+    elif w == '(0,1,0,0)': alg_name = 'REACT_L' # No distance
+    elif w == '(0,0,1,0)': alg_name = 'REACT_C' # No distance
+    elif w == '(0,0,0,0)': alg_name = 'REACT_F' # Use fidelity as fitness as a baseline
+    else: assert False, f"Unsupported weight combination: {w}"
 
-    logger = EvoLogger(save_path=EVO_LOG_PATH.joinpath(env_name), experiment_name=name)
+    if iterations == 0: alg_name = 'Random'
+
+    logger = EvoLogger(save_path=LOG_PATH.joinpath(f"{alg_name}/").joinpath(env_name), exp_name=exp_name)
 
     genetic_algorithm(
         pop_size=pop_size,
@@ -234,8 +231,8 @@ def evo_run(env_name: str, saved_model: str, render: bool, pop_size: int, iterat
         render=render,
         is_elitist=is_elitist,
         weights=[w1, w2, w3, w4],
-        exp_name=name,
+        fidelity_fitness=w == '(0,0,0,0)',
+        exp_name=exp_name,
         plot_frequency=plot_frequency
     )
-    print(logger.data)
     logger.close()
