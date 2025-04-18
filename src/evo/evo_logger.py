@@ -2,13 +2,13 @@ import pandas as pd
 
 
 class EvoLogger:
-    def __init__(self, save_path=None, experiment_name=None):
+    def __init__(self, save_path=None, exp_name=None):
         self.save_path = save_path
-        self.experiment_name = experiment_name + ".csv"
+        self.experiment_name = exp_name + ".csv"
         self.data = pd.DataFrame()
 
     def log(self, iteration, id, state,
-            m1, m2, m3, f,
+            m1, m2, m3, f, fidelity,
             d3, d4, md, r, tl, el):
         df = pd.DataFrame({"iteration": [iteration],
                            "id": [id],
@@ -17,6 +17,7 @@ class EvoLogger:
                            "global_diversity_measure": [m2],
                            "certainty_measure": [m3],
                            "fitness": [f],
+                           "fidelity": [fidelity],
                            "dist_local_diversity": [d3],
                            "dist_certainty": [d4],
                            "min_dist_of_measures": [md],
