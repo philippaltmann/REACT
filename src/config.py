@@ -4,7 +4,7 @@ class Configuration:
     def __init__(self):
         # evo config
         self.env = None
-        self.name = None
+        self.exp_name = None
         self.env_name = None
         self.saved_model = None
         self.map_size = None
@@ -18,14 +18,14 @@ class Configuration:
         self.max_owd = None
         self.seed = None
 
-    def set_evo_config(self, env, env_name, saved_model, map_size, pop_size, name, checkpoint, dimensions, is_discrete_env,
+    def set_evo_config(self, env, env_name, saved_model, map_size, pop_size, exp_name, checkpoint, dimensions, is_discrete_env,
                        min_state: float, max_state: float, state_encoding_length: int, env_seed: int, max_owd: float, seed: int):
         self.env = env
         self.env_name = env_name
         self.saved_model = saved_model
         self.map_size = map_size
         #self.population_size = pop_size
-        self.name = name
+        self.exp_name = exp_name
         self.checkpoint = checkpoint
         self.dimensions = dimensions
         self.is_discrete = is_discrete_env
@@ -36,22 +36,22 @@ class Configuration:
         self.max_owd = max_owd
         self.seed = seed
 
-    def set_eval_config(self, env, env_name, saved_model, map_size, name, checkpoint, env_seed):
+    def set_eval_config(self, env, env_name, saved_model, map_size, exp_name, checkpoint, env_seed):
         self.env = env
         self.env_name = env_name
         self.saved_model = saved_model
         self.map_size = map_size
-        self.name = name
+        self.exp_name = exp_name
         self.checkpoint = checkpoint
         self.env_seed = env_seed
 
-    def set_baseline_config(self, env, env_name, saved_model, map_size, name, checkpoint, env_seed, seed, state_encoding_length,
+    def set_baseline_config(self, env, env_name, saved_model, map_size, exp_name, checkpoint, env_seed, seed, state_encoding_length,
                             dimensions, is_discrete_env, min_state, max_state):
         self.env = env
         self.env_name = env_name
         self.saved_model = saved_model
         self.map_size = map_size
-        self.name = name
+        self.exp_name = exp_name
         self.checkpoint = checkpoint
         self.env_seed = env_seed
         self.seed = seed
