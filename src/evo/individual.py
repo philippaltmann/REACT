@@ -10,21 +10,12 @@ import evo.utils as utils
 class Individual:
     def __init__(self, state: str, id: int, weights: List[float]):
         self.id = id
-        if len(weights) != 4:
-            ValueError("not correctly initialized")
-        self.w1 = weights[0]
-        self.w2 = weights[1]
-        self.w3 = weights[2]
-        self.w4 = weights[3]
+        if len(weights) != 4: ValueError("not correctly initialized")
+        self.w1, self.w2, self.w3, self.w4 = weights
 
         self.state_encoding = state
-        self.state = utils.get_state(self.state_encoding, CONFIG.dimensions, CONFIG.is_discrete, CONFIG.min_state,
-                                     CONFIG.max_state)
-        print(id, " individual with state", self.state)
-        if CONFIG.env_name == "FetchReach":
-            self.precision = 3
-        else:
-            self.precision = None
+        self.state = utils.get_state(self.state_encoding)
+        self.precision = 3 if CONFIG.env_name == "FetchReach" else None
 
         self.state_sequence = []
         self.state_sequence_without_duplicates = []
@@ -34,24 +25,18 @@ class Individual:
         self.local_diversity_measure = None
         self.global_diversity_measure = None
         self.certainty_measure = None
+        self.fidelity = None
 
         # to investigate the impact of the different measures on the fitness
         self.dist_local_div = None
         self.dist_certainty = None
         self.min_dist_of_other_measures = None
-
         self.fitness = None
 
     def get_traj_length(self):
-        traj_length = 0
-        if CONFIG.env_name == "FetchReach":
-            for s_index in range(len(self.state_sequence)-1):
-                traj_length += math.dist(self.state_sequence[s_index], self.state_sequence[s_index + 1])
-        else:
-            traj_length = len(self.state_sequence_without_duplicates) - 1
-            if traj_length == -1:
-                traj_length = 0
-        return traj_length
+        if "Fetch" in CONFIG.env_name: 
+            return sum([math.dist(a,b) for a,b in zip(self.state_sequence[:-1], self.state_sequence[1:])])
+        return max(len(self.state_sequence_without_duplicates) - 1, 0)
 
     def compute_global_diversity(self, previous: List[List[List[float]]]) -> float:
         # remove repeated states from sequence of states to avoid having a high global diversity on all initial states,
@@ -63,16 +48,9 @@ class Individual:
             if utils.sublist_exists_in_list(self.state_sequence_without_duplicates, i):
                 return 0
 
-        # has to be defined for every distance problem
-        max_owd = CONFIG.max_owd
         # one-way-distance for continuous state_sequences with measurable distances
-        min_owd = max_owd
-        for i in previous:
-            owd = two_way_distance(i, current)
-            if owd < min_owd:
-                min_owd = owd
-        print("min owd:", min_owd)
-        normalized_min_owd = min_owd / max_owd
+        min_owd = min([two_way_distance(i, current) for i in previous] or [CONFIG.max_owd])
+        normalized_min_owd = min_owd / CONFIG.max_owd
         return self.w1 * normalized_min_owd
 
     def compute_local_diversity(self) -> float:
@@ -81,15 +59,10 @@ class Individual:
         this measure is.
         :return: local_diversity
         """
-        state_sequence_strings = [str(state) for state in self.state_sequence]
+        state_sequence_strings = [f'{state:}' for state in self.state_sequence]
         distinct_state_strings = set(state_sequence_strings)
         distinct_states = [eval(i) for i in distinct_state_strings]
-
-        if self.precision:
-            max_states = len(self.state_sequence)
-        else:
-            max_states = CONFIG.map_size * CONFIG.map_size
-
+        max_states = len(self.state_sequence) if self.precision else CONFIG.map_size * CONFIG.map_size
         return self.w2 * (len(distinct_states) / max_states)
 
     def compute_certainty(self, certainties) -> float:
@@ -139,11 +112,9 @@ class Individual:
         # get trajectory
         states, self.reward, certainties, actions = run_individual(self.state, render)
 
-        if self.precision:
-            # make states discrete and save in self.state_sequence
-            self.state_sequence = utils.reduce_precision_of_states(states, self.precision)
-        else:
-            self.state_sequence = states
+        # make states discrete and save in self.state_sequence
+        self.state_sequence = utils.reduce_precision_of_states(states, self.precision) if self.precision else states
+
         self.state_sequence_without_duplicates = utils.remove_duplicate_states(self.state_sequence)
 
         # no need to compute the fitness if the initial state is an immediate failure
@@ -154,6 +125,7 @@ class Individual:
 
             self.min_dist_of_other_measures, self.dist_local_div, self.dist_certainty = self.compute_diversity_measure(previous_local_diversities, previous_certainties)
             self.fitness = self.w4 * self.min_dist_of_other_measures + self.global_diversity_measure
+            if self.w4 == 0: self.fitness = self.global_diversity_measure + self.certainty_measure + self.local_diversity_measure
         else:  # move to beginning
             self.local_diversity_measure = 0
             self.global_diversity_measure = 0
