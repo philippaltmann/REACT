@@ -25,9 +25,9 @@ REACT | Fidelity | Random | Train
 
 Training   | REACT | Fidelity | Random | Train | Trajectories
 :----------|:-----:|:--------:|:------:|:-----:|:------------
-SAC (50k) | ![Fetch50k REACT](./img/Fetch50k/REACT.gif) | ![Fetch50k Fidelity](./img/Fetch50k/REACT_F.gif) | ![Fetch50k Random](./img/Fetch50k/Random.gif) | ![Fetch50k Train](./img/Fetch50k/Train.gif) | ![Fetch50k Trajectories](./img/Fetch50k/Heatmap.png)
-SAC (100k) | ![Fetch100k REACT](./img/Fetch100k/REACT.gif) | ![Fetch100k Fidelity](./img/Fetch100k/REACT_F.gif) | ![Fetch100k Random](./img/Fetch100k/Random.gif) | ![Fetch200k Train](./img/Fetch100k/Train.gif) | ![Fetch100k Trajectories](./img/Fetch100k/Heatmap.png)
-SAC (200k) | ![Fetch200k REACT](./img/Fetch200k/REACT.gif) | ![Fetch200k Fidelity](./img/Fetch200k/REACT_F.gif) | ![Fetch200k Random](./img/Fetch200k/Random.gif) | ![Fetch200k Train](./img/Fetch200k/Train.gif) | ![Fetch200k Trajectories](./img/Fetch200k/Heatmap.png)
+SAC (50k) | ![Fetch50k REACT](./img/Fetch50k/REACT.gif) | ![Fetch50k Fidelity](./img/Fetch50k/REACT_F.gif) | ![Fetch50k Random](./img/Fetch50k/Random.gif) | ![Fetch50k Train](./img/Fetch50k/Train.gif) | ![Fetch50k Trajectories](./img/Fetch50k/Trajectories.png)
+SAC (100k) | ![Fetch100k REACT](./img/Fetch100k/REACT.gif) | ![Fetch100k Fidelity](./img/Fetch100k/REACT_F.gif) | ![Fetch100k Random](./img/Fetch100k/Random.gif) | ![Fetch100k Train](./img/Fetch100k/Train.gif) | ![Fetch100k Trajectories](./img/Fetch100k/Trajectories.png)
+SAC (150k) | ![Fetch150k REACT](./img/Fetch150k/REACT.gif) | ![Fetch150k Fidelity](./img/Fetch150k/REACT_F.gif) | ![Fetch150k Random](./img/Fetch150k/Random.gif) | ![Fetch150k Train](./img/Fetch150k/Train.gif) | ![Fetch150k Trajectories](./img/Fetch150k/Trajectories.png)
 
 For further evaluation results regarding the resuling demonstration fidelity, reward optimality gap, and comparisons of different fitness particles and their influence, please refer to the full paper.
 
@@ -45,15 +45,13 @@ FlatGrid11  | 35000  | 42        | PPO   | 10       | 40         | 6
 HoleyGrid11 | 150000 | 33        | PPO   | 10       | 40         | 6
 FetchReach  | 50000  | 42        | SAC   | 10       | 40         | 9
 FetchReach  | 100000 | 42        | SAC   | 10       | 40         | 9
-FetchReach  | 200000 | 42        | SAC   | 10       | 40         | 9
+FetchReach  | 150000 | 42        | SAC   | 10       | 40         | 9
 
 ### Train the evaluated policy
 
 ```sh
 react train --env-name {{env_name}} --name train --model {{model}} --steps {{steps}} --env-seed [trainseed]
 ```
-
-react train --env-name HoleyGrid11 --name train --model PPO --steps 150000
 
 models and videos are saved to `experiments/model/<env_name>`
 
@@ -102,7 +100,7 @@ react plot --env-name FlatGrid11 --render
 react plot --env-name HoleyGrid11 --render 
 react plot --env-name Fetch50k --render 
 react plot --env-name Fetch100k --render 
-react plot --env-name Fetch200k --render --training
+react plot --env-name Fetch150k --render --training
 ```
 
 ## CLI Reference
@@ -166,7 +164,7 @@ These weights (w1,w2,w3,w4) allow the configuration of various ablations:
 
 `react plot` to generate the plots found in the paper.
 
-* `--env-name`: name of the experiment to plot (*FlatGrid11*, *HoleyGrid11*, *Fetch50k*, *Fetch100k*, *Fetch200k*)
+* `--env-name`: name of the experiment to plot (*FlatGrid11*, *HoleyGrid11*, *Fetch50k*, *Fetch100k*, *Fetch150k*)
 * `--render`: to render the trajectories generated from a singel random seed for REACT, REACT_F and Random
 
 ### Acknowledgements
