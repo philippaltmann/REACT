@@ -56,6 +56,7 @@ def run_model(env_name: str, saved_model: str, nr_episodes: int, checkpoint: int
     base_file = f'{env_name if len(name) == 0 else name}-{seed}'
     
     if env_name == "FetchReach": env_name += 'Agents' # Train on random targets / evaluate on random initial pos
+    # if env_name == "FetchReach": env_name += 'AgentsTargets' # Train on random targets / evaluate on random initial pos
     env = Autoreset(Monitor(gym.make(**hyphi_gym.named(env_name), seed=42, render_mode=render_mode), record_video=render))
     policy = "MlpPolicy"
 
@@ -71,7 +72,7 @@ def run_model(env_name: str, saved_model: str, nr_episodes: int, checkpoint: int
     R, L = (np.array(a) for a in zip(*[run_trained_model(model, model.get_env()) for _ in range(nr_episodes)]))
     F = L / L.sum() * abs(R.mean() - R) 
 
-    pd.DataFrame({"iteration": [0], "reward": R, "trajectory_length": L, "fidelity": F}).to_csv(f'{log_path}/{base_file}.csv')
+    pd.DataFrame({"iteration": list(range(nr_episodes)), "reward": R, "trajectory_length": L, "fidelity": F}).to_csv(f'{log_path}/{base_file}.csv')
 
     if render: env.get_wrapper_attr('save_video')(f'{video_path}/{base_file}.gif')
     env.close()

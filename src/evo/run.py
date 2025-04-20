@@ -58,35 +58,6 @@ def get_behaviour(model, env, render):
     return states, acc_reward, certainties, actions
 
 
-def run_hyphi_grid_individual(state, model_str, model_path, render, i):
-    done, reward, layout = utils.convert_state_to_custom_map(state, CONFIG.env_name, CONFIG.env_seed)
-
-    states = []
-    certainties = []
-    actions = []
-    random_state = random.getstate()
-
-    if not done:
-        env = CONFIG.env
-        env.layout = layout
-        model:BaseAlgorithm = eval(model_str)(policy="MlpPolicy", env=env)
-        if os.path.exists(model_path): model = model.load(model_path, env=env)
-        else: assert False, "Model not found"
-
-        vec_env = model.get_env(); vec_env.envs[0].unwrapped.layout = layout
-        states, reward, certainties, actions = get_behaviour(model, vec_env, render=False)
-
-        if render:
-            path = VIDEO_PATH.joinpath(CONFIG.env_name + "/eval/"+ CONFIG.saved_model + "-" + str(CONFIG.checkpoint) + CONFIG.exp_name + "/")
-            if not os.path.exists(path): os.makedirs(path)
-            path = str(path) +"/" + str(i) + ".gif"
-            env.get_wrapper_attr('save_video')(path)
-
-    random.seed(CONFIG.seed)
-    random.setstate(random_state)
-    return states, reward, certainties, actions
-
-
 def run_individual(state, render, i=None):
     _, model_str = CONFIG.saved_model.split("_")
     model_path = 'best_model' if CONFIG.checkpoint == 0 else 'rl_model_' + str(CONFIG.checkpoint) + '_steps'
@@ -106,7 +77,7 @@ def run_individual(state, render, i=None):
 
     elif 'Fetch' in CONFIG.env_name:
         vec_env.envs[0].unwrapped.agent, vec_env.envs[0].unwrapped.position_noise = np.array(state[:3]), 0
-        vec_env.envs[0].unwrapped.target, vec_env.envs[0].unwrapped.target_noise = np.array(state[3:]), 0
+        # vec_env.envs[0].unwrapped.target, vec_env.envs[0].unwrapped.target_noise = np.array(state[3:]), 0
 
     else: assert False, f'{CONFIG.env_name} not supported'
 

@@ -161,6 +161,7 @@ def evo_run(env_name: str, saved_model: str, render: bool, pop_size: int, iterat
     env = Monitor(gym.make( 
         **hyphi_gym.named( # Train on random targets / evaluate on random initial pos
             env_name + 'Agents' if "Fetch" in env_name else env_name), 
+            # env_name + 'AgentsTargets' if "Fetch" in env_name else env_name), 
           render_mode = "blender" if "Grid" in env_name else "3D", seed=env_seed
         ), record_video=render
     )
@@ -176,10 +177,10 @@ def evo_run(env_name: str, saved_model: str, render: bool, pop_size: int, iterat
     else:  # is continuous env aka FetchReach
         if env.unwrapped.position_noise != env.unwrapped.target_noise:
             assert False, "Fetch with inconsistent state ranges"
-        dimensions = len(env.unwrapped.target) + len(env.unwrapped.agent)
+        dimensions = len(env.unwrapped.agent)  # + len(env.unwrapped.target)
         max_state = env.unwrapped.position_noise; min_state = -max_state
         max_owd = two_way_distance(
-            np.full((1, *env.unwrapped.target.shape), -env.unwrapped.target_noise),
+            np.full((1, *env.unwrapped.target.shape), 0),  # -env.unwrapped.target_noise
             np.full((1, *env.unwrapped.agent.shape), env.unwrapped.position_noise)
         )
         map_size = 0  # there is no map

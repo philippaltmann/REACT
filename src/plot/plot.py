@@ -46,9 +46,7 @@ ENVS = lambda env_name: {
   'HoleyGrid11': ('train_PPO', 150000, 'HoleyGrid11'),
   'Fetch50k':    ('train_SAC',  50000, 'FetchReach'),
   'Fetch100k':   ('train_SAC', 100000, 'FetchReach'),
-  'Fetch100k':   ('train_SAC', 100000, 'FetchReach'),
-  'Fetch200k':   ('train_SAC', 200000, 'FetchReach'),
-  'Fetch300k':   ('train_SAC', 300000, 'FetchReach'),
+  'Fetch150k':   ('train_SAC', 150000, 'FetchReach'),
 }[env_name]
 
 
@@ -100,6 +98,8 @@ def plot_ablation(env, save_path=None):
   data = { name: [fetch(alg, env, metric) for metric in ['reward', 'fidelity']] for alg, name in zip(algorithms,names)}
 
   scores, interval_estimates = rly.get_interval_estimates(data, lambda r,f: np.array([m(r,f) for m in mtrcs.values()]), reps=50000)
+  for a, score, interval in zip(names, scores.values(), interval_estimates.values()): print(f"{a}: {score[0]:.3f}±{(interval[1][0]-interval[0][0])/2:.3f}")
+  # for a, score, interval in zip(names, scores.values(), interval_estimates.values()): print(f"{a}: {score[1]:.3f}±{(interval[1][1]-interval[0][1])/2:.3f}")
   fig, axes = plot_utils.plot_interval_estimates(scores, interval_estimates, metric_names=list(mtrcs.keys()), algorithms=names, colors=colors, xlabel='')
   if save_path: write_figure(fig, save_path)
   else: plt.show()
@@ -186,7 +186,7 @@ def plot_heatmap(state_matrix, name, color, save_path, f=np.log1p):
 
 
 
-def plot_movement(initial_states, seeds, algorithms, colors, full, save_path):
+def plot_movement(initial_states, seeds, algorithms, colors, full, save_path, show_seeds=[42]):
   fig = plt.figure(figsize=(5, 5 + 15 * full)); axs = []
   if full:
     ax1 = fig.add_subplot(1,4,1, projection='3d'); axs.append(ax1) # Gripper
@@ -194,6 +194,7 @@ def plot_movement(initial_states, seeds, algorithms, colors, full, save_path):
     ax3 = fig.add_subplot(1,4,3, projection='3d'); axs.append(ax3) # Gripper + Target
   ax4 = fig.add_subplot(1,4,4, projection='3d'); axs.append(ax4) # Full trajectory  
   for ax in axs: ax.xaxis.set_ticklabels([]); ax.yaxis.set_ticklabels([]); ax.zaxis.set_ticklabels([])
+  seeds = [[s for s in seed if s in [42]] for seed in seeds]
 
   for states, color, name, seed in zip(initial_states, colors.values(), algorithms, seeds):
     if full:
@@ -212,6 +213,7 @@ def plot_trajectory(env_name, full=True, save_path=None):
   env_config = { 'env_name': env, 'env_seed': 33, 'map_size': 0,
     'saved_model': saved_model, 'checkpoint': checkpoint, 'exp_name': None }
   env = Monitor(gym.make(**hyphi_gym.named(env + 'Agents' if "Fetch" in env else env), seed=env_config['env_seed']))
+  # env = Monitor(gym.make(**hyphi_gym.named(env + 'AgentsTargets' if "Fetch" in env else env), seed=env_config['env_seed']))
   if 'Grid' in env_name: env_config['map_size'] = env.unwrapped.size[0] - 2
   CONFIG.set_eval_config(env=env, **env_config)
 
@@ -232,6 +234,7 @@ def render_videos(env_name, record_seeds=[42]):
     'saved_model': saved_model, 'checkpoint': checkpoint, 'exp_name': None }
   render_mode = 'blender' if 'Grid' in env_name else '3D'
   env = Monitor(gym.make(**hyphi_gym.named(env_base + 'Agents' if "Fetch" in env_base else env_base), 
+  # env = Monitor(gym.make(**hyphi_gym.named(env_base + 'AgentsTargets' if "Fetch" in env_base else env_base), 
     seed=env_config['env_seed'], render_mode=render_mode), record_video=True)
   if 'Grid' in env_name: env_config['map_size'] = env.unwrapped.size[0] - 2
   CONFIG.set_eval_config(env=env, **env_config)
